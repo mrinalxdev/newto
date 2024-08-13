@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Dashboard</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .chart-container { height: 200px; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <header class="bg-blue-600 text-white p-4 rounded-t-lg">
+            <h1 class="text-3xl font-bold">NetwoDashboard</h1>
+            <p class="text-sm">Real-time Network and System Monitoring</p>
+        </header>
+        
+        <div class="bg-white p-4 rounded-b-lg shadow mb-4">
+            <h2 class="text-xl font-semibold mb-2">System Information</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <p class="font-bold">Hostname:</p>
+                    <p id="hostname"></p>
+                </div>
+                <div>
+                    <p class="font-bold">OS:</p>
+                    <p id="os"></p>
+                </div>
+                <div>
+                    <!-- <p class="font-bold">IP Address:</p>
+                    <p id="ipAddress"></p> -->
+                </div>
+                <div>
+                    <!-- <p class="font-bold">Uptime:</p>
+                    <p id="uptime"></p> -->
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-white p-4 rounded shadow">
+                <h2 class="text-xl font-semibold mb-2">Bandwidth Usage</h2>
+                <div class="chart-container">
+                    <canvas id="bandwidthChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded shadow">
+                <h2 class="text-xl font-semibold mb-2">CPU Usage</h2>
+                <div class="chart-container">
+                    <canvas id="cpuChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded shadow">
+                <h2 class="text-xl font-semibold mb-2">Memory Usage</h2>
+                <div class="chart-container">
+                    <canvas id="memoryChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded shadow">
+                <h2 class="text-xl font-semibold mb-2">Disk Usage</h2>
+                <div class="chart-container">
+                    <canvas id="diskChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4 bg-white p-4 rounded shadow">
+            <h2 class="text-xl font-semibold mb-2">Ping Latency</h2>
+            <div id="pingLatency" class="text-2xl font-bold"></div>
+        </div>
+    </div>
+
+    <script>
+        function createChart(id, label, color) {
+            const ctx = document.getElementById(id).getContext('2d');
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: label,
+                        data: [],
+                        borderColor: color,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    },
+                    animation: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        const bandwidthChart = createChart('bandwidthChart', 'Bandwidth (bytes)', 'rgb(75, 192, 192)');
+        const cpuChart = createChart('cpuChart', 'CPU Usage (%)', 'rgb(255, 99, 132)');
+        const memoryChart = createChart('memoryChart', 'Memory Usage (%)', 'rgb(54, 162, 235)');
+        const diskChart = createChart('diskChart', 'Disk Usage (%)', 'rgb(255, 206, 86)');
+
+        function updateChart(chart, value) {
+            const now = new Date();
+            chart.data.labels.push(now.toLocaleTimeString());
+            chart.data.datasets[0].data.push(value);
+
+            if (chart.data.labels.length > 20) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+
+            chart.update();
+        }
+
+        function formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return `${days}d ${hours}h ${minutes}m`;
+        }
+
+        const socket = new WebSocket('ws://localhost:8080/ws');
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            updateChart(bandwidthChart, data.bandwidth);
+            updateChart(cpuChart, data.cpuUsage);
+            updateChart(memoryChart, data.memoryUsage);
+            updateChart(diskChart, data.diskUsage);
+            document.getElementById('pingLatency').textContent = `${data.pingLatency.toFixed(2)} ms`;
+            
+            // Update system information
+            document.getElementById('hostname').textContent = data.hostInfo.hostname;
+            document.getElementById('os').textContent = `${data.hostInfo.platform} (${data.hostInfo.os})`;
+            document.getElementById('ipAddress').textContent = data.networkInfo.ipAddress;
+            document.getElementById('uptime').textContent = formatUptime(data.hostInfo.uptime);
+        };
+    </script>
+</body>
+</html>
